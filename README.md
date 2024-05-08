@@ -1,4 +1,4 @@
-# SENG365 Assignment 1 API Server (Petition Site)
+# API Server (Petition Site)
 
 ## Running locally
 
