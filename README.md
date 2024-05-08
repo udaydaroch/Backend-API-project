@@ -42,41 +42,5 @@ operations, if you check the resource is missing first then a 404 makes sense, i
 to complete the action first a 403 makes sense. In a proper application, you may also think about which one of these
 responses is better, and gives away the least information about the system to the client.
 
-## How marking works
-
 A Postman collection has been provided in the `postman` folder, you can easily import this (and the specific
-environment variables) to test your assignment as you work on it. More information about the exact steps can be found in
-Lab 2. **Note:** You will need to copy the images within the files folder to your Postman working directory.
-
-This Postman collection is a subset of the tests your application will be marked against so passing these tests should
-be your highest priority. You may wish to add to this collection yourself to have more tests to validate your work
-against as you go.
-**Note:** The collection provided accounts for about half of the total tests.
-
-## Steps you should take before finishing
-
-Before finalising your code, you should
-
-1. Import a fresh copy of your project from Eng-Git
-2. Create a `.env` file with only the fields discussed above
-3. `run npm install`
-4. `run npm run start`
-5. Run the Postman collection provided and check that the tests are running as expected
-
-These steps will help you find issues such as:
-
-1. Required dependencies not included in your `package.json`
-2. Use of other environment variables that will not be used during marking
-
-## Final notes
-
-We suggest that you do not modify the files within the `src/app/resources` folder as we may update these at any time if there is
-an issue (such as updating the api spec). Whilst you are free to modify the Postman collection it may be safer to do
-this through Postman only and not push the updated collection (or push your updated version under a different name).
-
-Images within the `storage\default` folder should not be removed, when reloading the server these will be copied to
-storage\images where the server can add, update or delete them when running.
-
-If you find an inconsistency or issue with the reference server please reach out to Morgan English
-`morgan.english@canterbury.ac.nz`.
-
+environment variables) to test your assignment as you work on it. 
