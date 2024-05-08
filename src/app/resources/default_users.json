@@ -1,0 +1,25 @@
+{
+  "properties": ["email", "first_name", "last_name", "image_filename", "password"],
+  "usersData": [
+    ["k@gmail.com", "Kristy", "Lincoln", "user_1.jpg", "password"],
+    ["c.anagonye@stjohns.edu.au", "Chidi", "Anagonye", "user_2.png", "password"],
+    ["tahani.aljamil@ox.ac.uk", "Tahani", "Al-Jamil", "user_3.gif", "password"],
+    ["e.shellstrop@hotmail.com", "Eleanor" ,"Shellstrop", "user_4.jpg", "password"],
+    ["B@gmail.com", "Fernando", "Brown", "user_5.jpg", "password"],
+    ["jeh128@mail.nz", "Jack", "Chen", "user_6.jpg", "password"],
+    ["a@gmail.com", "Amanda", "Faria", "user_7.PNG", "password"],
+    ["zhe25@mail.nz", "Henry", "Krippner", "user_8.gif", "password"],
+    ["lfg23@mail.nz", "Ella", "Yellow", "user_9.PNG", "password"],
+    ["ama541@mail.nz", "Finn", "Veale", null, "password"],
+    ["boooooortles@hotmail.com", "Jason", "Mendoza", "user_11.jpg", "password"],
+    ["mindystclaire@gmail.com", "Mindy", "St. Claire", null, "password"],
+    ["s.garnett@stjohns.edu.au", "Simone", "Garnett", null, "password"],
+    ["pillboi@ymail.com", "Steven", "Peleaz", null, "password"],
+    ["larryhemsworth@gmail.com", "Larry", "Hemsworth", null, "password"],
+    ["kamilah.aljamil@ox.ac.uk", "Kamilah", "Al-Jamil", null, "password"],
+    ["johnwheaton@gmail.com", "John", "Wheaton", null, "password"],
+    ["tane.mahuta@example.com", "Tane", "Taumata", null, "password"],
+    ["bobbyjones@example.com", "Bob", "Jones", null, "password"],
+    ["m@m.com", "Morgan", "English", "user_20.jpeg", "password"]
+  ]
+}

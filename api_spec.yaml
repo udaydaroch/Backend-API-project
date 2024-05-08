@@ -1,0 +1,1035 @@
+openapi: 3.0.0
+info:
+  title: "SENG365 2024: Petitions API"
+  version: 1.0.2
+  description: "This specification documents the petitions API to be implemented for Assignment 1. This API provides all of the server-side functionality necessary in order to implement all the user stories for Assignment 2"
+servers:
+  - url: https://seng365.csse.canterbury.ac.nz/api/v1
+    description: "Reference server"
+  - url: http://localhost:4941/api/v1
+    description: "Your development server"
+tags:
+  - name: backdoor
+    description: "Development-only endpoints for resetting the database or querying it directly.<br>**These endpoints have been implemented for you, any changes to their functionality may cause tests to break**."
+  - name: users
+    description: "Endpoints for registering, logging in, modifying, and retrieving user information"
+  - name: users.images
+    description: "Endpoints for retrieving, uploading and deleting user profile images"
+  - name: petitions
+    description: "Endpoints for retrieving, creating, modifying, and deleting petitions"
+  - name: petitions.supportTiers
+    description: "Endpoints for modifying existing petition's support tiers"
+  - name: petitions.supporters
+    description: "Endpoints for viewing and updating supporters of petitions"
+  - name: petitions.images
+    description: "Endpoints for retrieving and uploading petition images"
+paths:
+  /reset:
+    post:
+      tags:
+        - backdoor
+      summary: "Force reset of database to original structure."
+      responses:
+        '200':
+          description: "OK"
+        '500':
+          description: "Internal Server Error"
+  /resample:
+    post:
+      tags:
+        - backdoor
+      summary: "Reload sample of data into database."
+      responses:
+        '201':
+          description: "Created"
+        '500':
+          description: "Internal Server Error"
+  /reload:
+    post:
+      tags:
+        - backdoor
+      summary: "Force reset of database to original structure and reload all sample data"
+      responses:
+        201:
+          description: "Created"
+        500:
+          description: "Internal Server Error"
+  /executesql:
+    post:
+      tags:
+        - backdoor
+      summary: "Execute any arbitrary SQL statement provided, and return the output from the database."
+      description: "This is an enormous security hole, and <b>wouldn't</b> be present in any real-world application. However, we're using it for testing purposes in this assignment"
+      requestBody:
+        content:
+          text/plain:
+            schema:
+              title: SqlCommand
+              type: string
+              example: "SELECT * from users;"
+      responses:
+        200:
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SqlResult"
+                  - $ref: "#/components/schemas/SqlResultSet"
+        500:
+          description: "Internal Server Error"
+  /users/register:
+    post:
+      tags:
+        - users
+      summary: "Register as a new user"
+      description: "Create a new user with the specified information.<ul><li>The email **must be syntactically valid** (e.g. it has to include an `@` and a top level domain for example `x@y.z`). Whether it is actually a registered email address will not be checked.</li><li>The email address <b>must not already be in use</b> (if it is in use the server should return a 403).</li><li>The password **must be at least 6 characters**</li></ul>"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterUser"
+      responses:
+        201:
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+        400:
+          description: "Bad Request. Invalid information"
+        403:
+          description: "Forbidden.<ul><li>Email already in use</li></ul>"
+        500:
+          description: "Internal Sever Error"
+  /users/login:
+    post:
+      tags:
+        - users
+      summary: "Log in as an existing user."
+      description: "The response will contain a (unique) randomly-generated token that that client-side should store.<br>Whenever the client makes a request that requires authentication it should provide that same token as the value of the `X-Authorization` header in the request. The server will compare this to the value it has stored in the database to authenticate that request."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginUser"
+      responses:
+        200:
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        400:
+          description: "Bad Request. Invalid information"
+        401:
+          description: "UnAuthorized. Incorrect email/password"
+        500:
+          description: "Internal Server Error"
+  /users/logout:
+    post:
+      tags:
+        - users
+      summary: "Log out the currently authorised user."
+      description: "User will be logged out and their token will no longer be acceptable for authenticated requests"
+      security:
+        - UserToken: []
+      responses:
+        200:
+          description: "OK"
+        401:
+          description: "Unauthorized. Cannot log out if you are not authenticated"
+        500:
+          description: "Internal Server Error"
+  /users/{id}:
+    parameters:
+      - name: "id"
+        description: "ID of the user"
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/LoginResponse/properties/userId"
+    get:
+      tags:
+        - users
+      summary: "Retrieve information about a user"
+      description: "The email field is only returned when the currently authenticated user is viewing their **own** details. Otherwise only the first and last names should be returned (this includes unauthenticated requests)."
+      security:
+        - {}
+        - UserToken: []
+      responses:
+        200:
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+                required:
+                  - firstName
+                  - lastName
+        404:
+          description: "Not Found. No user with specified ID"
+        500:
+          description: "Internal Server Error"
+    patch:
+      tags:
+        - users
+      summary: "Change a user's details"
+      description: "Update a user's information with that specified. Only accessible by the user themselves.<ul><li>The email must be syntactically valid and not in use as described in `/users/register`.</li><li>The `password` and `currentPassword` fields **can only be supplied when editing the password**.</li><li>The `currentPassword` **must match the users existing password**.</li><li>`currentPassword` and `password` **must not be the same**.</li><li>`currentPassword` and `password` **must be at least 6 characters**</li></ul>. **Note**: A subset of values can be supplied in the body (i.e. only changing the email)"
+      security:
+        - UserToken: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchUser"
+      responses:
+        200:
+          description: "OK"
+        400:
+          description: "Bad request. Invalid information"
+        401:
+          description: "Unauthorized or Invalid currentPassword"
+        403:
+          description: "Forbidden. <ul><li>Can not edit another user's information</li><li>Email is already in use</li><li>Identical current and new passwords</li></ul>"
+        404:
+          description: "Not Found"
+        500:
+          description: "Internal Server Error"
+  /users/{id}/image:
+    parameters:
+      - name: "id"
+        description: "ID of the user"
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/LoginResponse/properties/userId"
+    get:
+      tags:
+        - users.images
+      summary: "Retrieve a user's profile image"
+      description: "The response MIME type will be one of `image/png`, `image/jpeg`, or `image/gif` depending on the filetype of the image being retrieved."
+      responses:
+        200:
+          description: "OK"
+          content:
+            image:
+              schema:
+                $ref: "#/components/schemas/BinaryImageFile"
+        404:
+          description: "Not Found. No user with specified ID, or user has no image"
+        500:
+          description: "Internal Server Error"
+    put:
+      tags:
+        - users.images
+      summary: "Set a user's profile photo"
+      description: "Only accessible to the user themselves. If the user already has a profile photo, the current profile photo will be replaced with it and a 200 OK response sent. If not, a 201 Created response will be sent.<br>If the file is a `.png`, the request will be sent with `Content-Type: image/png`. If the file is a `.jpeg` or `.jpg`, the request will be sent with `Content-Type: image/jpeg`. If the file is a `.gif`, the request will be sent with `Content-Type: image/gif`.<br>The request body should contain the raw binary content of the photo, i.e. it should not be in `multipart/form-data` format or contain any file metadata."
+      security:
+        - UserToken: []
+      requestBody:
+        content:
+          image/png:
+            schema:
+              $ref: "#/components/schemas/BinaryImageFile"
+          image/jpeg:
+            schema:
+              $ref: "#/components/schemas/BinaryImageFile"
+          image/gif:
+            schema:
+              $ref: "#/components/schemas/BinaryImageFile"
+        required: true
+      responses:
+        200:
+          description: "OK. Image updated"
+        201:
+          description: "Created. New image created"
+        400:
+          description: "Bad Request. Invalid image supplied (possibly incorrect file type)"
+        401:
+          description: "Unauthorized"
+        403:
+          description: "Forbidden<ul><li>Can not change another user's profile photo</li></ul>"
+        404:
+          description: "Not found. No such user with ID given"
+        500:
+          description: "Internal Server Error"
+    delete:
+      tags:
+        - users.images
+      summary: "Delete a user's profile image"
+      security:
+        - UserToken: []
+      responses:
+        200:
+          description: "OK"
+        401:
+          description: "Unauthorized"
+        403:
+          description: "Forbidden. <ul><li>Can not delete another user's profile photo</li></ul>"
+        404:
+          description: "Not Found. No such user with ID given"
+        500:
+          description: "Internal Server Error"
+  /petitions:
+    get:
+      tags:
+        - petitions
+      summary: "View Petitions"
+      description: "Get a list of all petitions with a subset of information.</br>By default, the petitions should be sorted by when they were created from oldest to newest. The list should be filtered, then sorted, then paginated using `startIndex` and `count`. </br>The returned object must include the total number of petitions that match the search criteria, which may differ from the number returned by the query (this is for client-side pagination)."
+      parameters:
+        - in: query
+          name: startIndex
+          description: "Number of items to skip before returning results"
+          schema:
+            $ref: "#/components/schemas/PetitionSearchRequest/properties/startIndex"
+        - in: query
+          name: count
+          description: "Number of items to include in results."
+          schema:
+            $ref: "#/components/schemas/PetitionSearchRequest/properties/count"
+        - in: query
+          name: q
+          description: "Only include petitions that have the search 'q' term in their title or description."
+          schema:
+            $ref: "#/components/schemas/PetitionSearchRequest/properties/q"
+        - in: query
+          name: categoryIds
+          description: "Only include petitions that match **any** of the given categories (by id). Only ids that map to categories allowed."
+          schema:
+            $ref: "#/components/schemas/PetitionSearchRequest/properties/categoryIds"
+        - in: query
+          name: supportingCost
+          description: "Only include petitions that have at least 1 support tier less than or equal to the given value. A value of 0 will only include petitions that are free to support. If no value is provided the API must return all petitions."
+          schema:
+            $ref: "#/components/schemas/PetitionSearchRequest/properties/supportingCost"
+        - in: query
+          name: ownerId
+          description: "Only include petitions that have the given user (id) as their owner."
+          schema:
+            $ref: "#/components/schemas/PetitionSearchRequest/properties/ownerId"
+        - in: query
+          name: supporterId
+          description: "Only include petitions that where the given user (id) is a supporter."
+          schema:
+            $ref: "#/components/schemas/PetitionSearchRequest/properties/supporterId"
+        - in: query
+          name: sortBy
+          description: "Sort the petitions by the given property, according to the following rules:<ul><li>`ALPHABETICAL_ASC`: alphabetically by title, A-Z</li><li>`ALPHABETICAL_DESC`: alphabetically by title, Z-A</li><li>`COST_ASC`: by cost of cheapest support tier ascending</li><li>`COST_DESC`: by cost of cheapest support tier descending</li></li>`CREATED_ASC`: chronologically in order of creation date oldest-newest</li><li>`CREATED_DESC`: chronologically in order of creation date newest-oldest</li></ul>All sorting cases must include a tie-breaker on **petitionId**"
+          schema:
+            $ref: "#/components/schemas/PetitionSearchRequest/properties/sortBy"
+      responses:
+        200:
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetitionSearchResponse"
+        400:
+          description: "Bad Request"
+        500:
+          description: "Internal Server Error"
+    post:
+      tags:
+        - petitions
+      summary: "Add a new petition"
+      description: "Create a new petition.<ul><li> The `categoryId` **must reference an existing category**, if it does not it must return a 400.</li><li>A Petition **must have between 1 and 3** `supportTiers` (inclusive), if it does not it must return a 400.</li><li>The `title` **must be unique**, otherwise it must return a 403.</li><li>Each `supportTier.title` **must be unique within those for the petition**, otherwise it must return a 400.</li></ul>"
+      security:
+        - UserToken: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostPetition"
+      responses:
+        201:
+          description: "Created"
+          content:
+            application/json:
+              schema:
+                properties:
+                  petitionId:
+                    $ref: "#/components/schemas/PetitionOverview/properties/petitionId"
+        400:
+          description: "Bad Request"
+        401:
+          description: "Unauthorized"
+        403:
+          description: "Forbidden. <ul><li>Only the owner of a petition may change it</li><li>Petition title already exists</li></ul>"
+        500:
+          description: "Internal Server Error"
+  /petitions/{id}:
+    parameters:
+      - name: id
+        description: "The id of the petition"
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/PetitionOverview/properties/petitionId"
+    get:
+      tags:
+        - petitions
+      summary: "Retrieve detailed information about a petition"
+      description: "Retrieve all information about a petition matching `id`."
+      responses:
+        200:
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Petition"
+        404:
+          description: "Not Fount. No petition with id"
+        500:
+          description: "Internal Server Error"
+    patch:
+      tags:
+        - petitions
+      summary: "Update an existing petition"
+      description: "Make changes to the basic attributes (`title`, `description` and `cost`) of an existing petition. Only accessible to the owner of the petition. **The same requirements as posting a petition exist**.<br>These basic values for a petition can be updated at any time, even if there are already supporters."
+      security:
+        - UserToken: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchPetition"
+      responses:
+        200:
+          description: "OK"
+        400:
+          description: "Bad Request. Invalid information"
+        401:
+          description: "Unauthorized"
+        403:
+          description: "Forbidden. <ul><li>Only the owner of a petition may change it</li><li>Petition title already exists</li></ul>"
+        404:
+          description: "Not Found. No petition found with id"
+        500:
+          description: "Internal Server Error"
+    delete:
+      tags:
+        - petitions
+      summary: "Delete a petition"
+      description: "Delete an existing petition. Only accessible to the owner of the petition. **Can not delete a petition if it has a supporter for any of its support tiers**"
+      security:
+        - UserToken: []
+      responses:
+        401:
+          description: "Unauthorized"
+        403:
+          description: "Forbidden.<ul><li>Only the owner of a petition may delete it</li><li>Can not delete a petition with one or more supporters</li></ul>"
+        404:
+          description: "Not Found. No petition found with id"
+        500:
+          description: "Internal Server Error"
+  /petitions/categories:
+    get:
+      tags:
+        - petitions
+      summary: "Get all petition categories"
+      description: "Retrieve a list of all accepted categories for petitions"
+      responses:
+        200:
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+        500:
+          description: "Internal Server Error"
+  /petitions/{id}/image:
+    parameters:
+      - name: id
+        description:  "Petition id"
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/PetitionOverview/properties/petitionId"
+    get:
+      tags:
+        - petitions.images
+      summary: "Get a petition image"
+      description: "Gets the specified petition's image. The response MIME type will be either `image/png`, `image/jpeg`, or `image/gif`, depending on the file type of the image being retrieved."
+      responses:
+        200:
+          description: "OK"
+          content:
+            image:
+              schema:
+                $ref: "#/components/schemas/BinaryImageFile"
+        404:
+          description: "Not found.<ul><li>No petition with id</li><li>Petition has no image</li></ul>"
+        500:
+          description: "Internal Server Error"
+    put:
+      tags:
+        - petitions.images
+      summary: "Set a petition hero image"
+      description: "Set the specified petition's hero image. Only available to the owner of the petition. If the petition already has a hero image, the current hero image will be replaced and a 200 OK response sent. If not, a 201 created response will be sent.<br>If the file is a `.png`, the request will be sent with `Content-Type: image/png`. If the file is a `.jpeg` or `.jpg`, the request will be sent with `Content-Type: image/jpeg`. If the file is a `.gif`, the request will be sent with `Content-Type: image/gif`. No other image types should be allowed. <br>The request body should contain the raw binary content of the photo, i.e. it should not be in `multipart/form-data` format or contain any file metadata."
+      security:
+        - UserToken: []
+      requestBody:
+        content:
+          image/png:
+            schema:
+              $ref: '#/components/schemas/BinaryImageFile'
+          image/jpeg:
+            schema:
+              $ref: '#/components/schemas/BinaryImageFile'
+          image/gif:
+            schema:
+              $ref: '#/components/schemas/BinaryImageFile'
+        required: true
+      responses:
+        200:
+          description: "OK. Image updated"
+        201:
+          description: "Created. Image added"
+        400:
+          description: "Bad Request"
+        401:
+          description: "Unauthorized"
+        403:
+          description: "Forbidden. Only the owner of a petition can change the hero image"
+        404:
+          description: "Not Found. No petition found with id"
+        500:
+          description: "Internal Server Error"
+  /petitions/{id}/supportTiers:
+    parameters:
+      - name: id
+        description:  "Petition id"
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/PetitionOverview/properties/petitionId"
+    put:
+      tags:
+        - petitions.supportTiers
+      summary: "Add a new petition support tier"
+      description: "Add a new support tier. **Can not be added if 3 support tiers already exist**. The **title must be unique within the support tiers** of the petition."
+      security:
+        - UserToken: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostSupportTier"
+      responses:
+        201:
+          description: "OK"
+        400:
+          description: "Bad Request"
+        401:
+          description: "Unauthorized"
+        404:
+          description: "Not Found"
+        403:
+          description: "Forbidden<ul><li>Only the owner of a petition may modify it</li><li>Can add a support tier if 3 already exist</li><li>Support title not unique within petition</li></ul>"
+        500:
+          description: "Internal Server Error"
+  /petitions/{id}/supportTiers/{tierId}:
+    parameters:
+      - name: id
+        description:  "Petition id"
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/PetitionOverview/properties/petitionId"
+      - name: tierId
+        description:  "Support Tier id"
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/PetitionOverview/properties/petitionId"
+    patch:
+      tags:
+        - petitions.supportTiers
+      summary: "Edit one of a petition's support tiers"
+      description: "Update a support tier. **Can not be updated if a supporter already exists for the specified tier**"
+      security:
+        - UserToken: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchSupportTier"
+      responses:
+        200:
+          description: "OK"
+        400:
+          description: "Bad Request"
+        401:
+          description: "Unauthorized"
+        403:
+          description: "Forbidden<ul><li>Only the owner of a petition may modify it</li><li>Can not edit a support tier if a supporter already exists for it</li><li>Support title not unique within petition</li></ul>"
+        404:
+          description: "Not Found"
+        500:
+          description: "Internal Server Error"
+    delete:
+      tags:
+        - petitions.supportTiers
+      summary: "Remove a petition support tier"
+      description: "Remove a support tier. **Can not be removed if a supporter already exists for the specified tier**, **Can not remove a support tier if it is the only one for a petition**"
+      security:
+        - UserToken: []
+      responses:
+        200:
+          description: "OK"
+        400:
+          description: "Bad Request"
+        401:
+          description: "Unauthorized"
+        403:
+          description: "Forbidden<ul><li>Only the owner of a petition may delete it</li><li>Can not delete a support tier if a supporter already exists for it</li><li>Can not remove a support tier if it is the only one for a petition</li></ul>"
+        404:
+          description: "Not Found"
+        500:
+          description: "Internal Server Error"
+  /petitions/{id}/supporters:
+    parameters:
+      - name: id
+        description:  "Petition id"
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/PetitionOverview/properties/petitionId"
+    get:
+      tags:
+        - petitions.supporters
+      summary: "Get all the supporters of a petition"
+      description: "Get a list of all supporters of the specified petition. The supporters are returned in reverse chronological order (from most recent to oldest) by `timestamp`."
+      responses:
+        200:
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Supporter"
+        404:
+          description: "Not Found. No petition with id"
+        500:
+          description: "Internal Server Error"
+    post:
+      tags:
+        - petitions.supporters
+      summary: "Support a petition"
+      description: "Support the specified petition at the specified tier. A user can support multiple different tiers of the same petition, but may only support at each tier once"
+      security:
+        - UserToken: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostSupport"
+      responses:
+        201:
+          description: "Created"
+        400:
+          description: "Bad Request"
+        401:
+          description: "Unauthorized"
+        403:
+          description: "Forbidden.<ul><li>Cannot support your own petition</li><li>Already supported at this tier</li></ul>"
+        404:
+          description: "Not Found.<ul><li>No petition found with id</li><li>Support tier does not exist</li></ul>"
+        500:
+          description: "Internal Server Error"
+components:
+  schemas:
+    SqlResult:
+      type: object
+      properties:
+        fieldCount:
+          type: integer
+          example: 0
+        affectedRows:
+          type: integer
+          example: 1
+        insertId:
+          type: integer
+          example: 1
+        serverStatus:
+          type: integer
+          example: 2
+        warningCount:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: "(Rows matched: 1 Changed: 0 Warnings 0)"
+        protocol41:
+          type: boolean
+          example: true
+        changedRows:
+          type: integer
+          example: 0
+    SqlResultSet:
+      type: array
+      items: {}
+    UserEmail:
+      title: UserEmail
+      type: object
+      properties:
+        email:
+          type: string
+          description: "<i>Must include an @ symbol and a top level domain i.e. \"x@y.z\"</i>"
+          minLength: 1
+          maxLength: 256
+          format: email
+          example: "adam@example.com"
+    UserPassword:
+      title: UserPassword
+      properties:
+        password:
+          type: string
+          minLength: 6
+          maxLength: 64
+          format: password
+          example: "password"
+    UserCurrentPassword:
+      title: UserCurrentPassword
+      properties:
+        currentPassword:
+          type: string
+          minLength: 6
+          maxLength: 64
+          format: password
+          example: "old_password"
+    User:
+      title: User
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/UserEmail"
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          example: "Jane"
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          example: "Doe"
+    RegisterUser:
+      title: RegisterUser
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - $ref: "#/components/schemas/UserPassword"
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+    LoginUser:
+      title: LoginUser
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/UserEmail"
+        - $ref: "#/components/schemas/UserPassword"
+      required:
+        - email
+        - password
+    RegisterResponse:
+      title: RegisterResponse
+      type: object
+      properties:
+        userId:
+          type: integer
+          minimum: 0
+          example: 11
+    LoginResponse:
+      title: LoginResponse
+      type: object
+      properties:
+        userId:
+          type: integer
+          minimum: 0
+          example: 11
+        token:
+          type: string
+          example: "JSkIEpXk0b2jLgDpRuKAjGwCbFnDM0Tj"
+    PatchUser:
+      title: PatchUser
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - $ref: "#/components/schemas/UserPassword"
+        - $ref: "#/components/schemas/UserCurrentPassword"
+    DateTimeInput:
+      title: DateTimeInput
+      description: A datetime expressed with no timezone, as either a date (yyyy-MM-dd) or date and time (yyyy-MM-dd hh:mm:ss.sss)
+      type: string
+      example: '2012-04-23 18:25:43'
+    DateTimeOutput:
+      title: DateTimeOutput
+      description: A UTC datetime expressed in ISO8601 format (yyyy-MM-ddThh:mm:ss.sssZ)
+      type: string
+      example: '2012-04-23T18:25:43.511Z'
+    BinaryImageFile:
+      type: string
+      format: binary
+      description: The raw content of the PNG, JPEG, or GIF image file.
+      example: (raw content of PNG, JPEG, or GIF image file)
+    Category:
+      title: Category
+      type: object
+      properties:
+        categoryId:
+          type: integer
+          minimum: 0
+          example: 1
+          nullable: false
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          example: "Art"
+          nullable: false
+    PetitionSearchRequest:
+      title: PetitionSearchRequest
+      type: object
+      properties:
+        startIndex:
+          type: integer
+          minimum: 0
+          default: 0
+          example: 10
+        count:
+          type: integer
+          minimum: 0
+          example: 10
+        q:
+          type: string
+          minLength: 1
+          maxLength: 64
+          example: "Park"
+        categoryIds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category/properties/categoryId"
+        supportingCost:
+          title: SupportingCost
+          type: integer
+          minimum: 0
+          example: 5
+        ownerId:
+          $ref: "#/components/schemas/LoginResponse/properties/userId"
+        supporterId:
+          $ref: "#/components/schemas/LoginResponse/properties/userId"
+        sortBy:
+          type: string
+          enum:
+            - ALPHABETICAL_ASC
+            - ALPHABETICAL_DESC
+            - COST_ASC
+            - COST_DESC
+            - CREATED_ASC
+            - CREATED_DESC
+          default: CREATED_ASC
+    PetitionSearchResponse:
+      title: PetitionSearchResponse
+      type: object
+      properties:
+        petitions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetitionOverviewIncCost"
+          nullable: false
+        count:
+          type: integer
+          minimum: 0
+          example: 15
+          nullable: false
+    PetitionOverview:
+      title: PetitionOverview
+      type: object
+      properties:
+        petitionId:
+          type: integer
+          minimum: 0
+          example: 1
+          nullable: false
+        title:
+          type: string
+          example: "Park Preservation"
+          minLength: 1
+          maxLength: 128
+        categoryId:
+          $ref: "#/components/schemas/Category/properties/categoryId"
+        ownerId:
+          $ref: "#/components/schemas/LoginResponse/properties/userId"
+        ownerFirstName:
+          $ref: "#/components/schemas/User/properties/firstName"
+        ownerLastName:
+          $ref: "#/components/schemas/User/properties/lastName"
+        numberOfSupporters:
+          type: number
+          minimum: 0
+          example: 100
+        creationDate:
+          $ref: "#/components/schemas/DateTimeOutput"
+    PetitionOverviewIncCost:
+      title: PetitionOverviewIncCost
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/PetitionOverview"
+      properties:
+        supportingCost:
+          type: integer
+          minimum: 0
+          example: 0
+          nullable: false
+    Petition:
+      title: Petition
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/PetitionOverview"
+      properties:
+        description:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          example: "Help us renovate the local park!"
+        moneyRaised:
+          type: integer
+          minimum: 0
+          example: 950
+        supportTiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupportTier"
+    PatchSupportTier:
+      title: PatchSupportTier
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 128
+          example: "Primary Supporter"
+          nullable: false
+        description:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          example: "Supporting this tier will include getting your name included on a plaque"
+          nullable: false
+        cost:
+          type: integer
+          minimum: 0
+          example: 10
+          nullable: false
+    PostSupportTier:
+      title: PostSupportTier
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/PatchSupportTier"
+      required:
+        - "title"
+        - "description"
+        - "cost"
+    SupportTier:
+      title: SupportTier
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/PatchSupportTier"
+      properties:
+        supportTierId:
+          type: integer
+          minimum: 0
+          example: 1
+          nullable: false
+    PatchPetition:
+      title: PatchPetition
+      type: object
+      properties:
+        title:
+          $ref: "#/components/schemas/PetitionOverview/properties/title"
+        description:
+          $ref: "#/components/schemas/Petition/properties/description"
+        categoryId:
+          $ref: "#/components/schemas/PetitionOverview/properties/categoryId"
+    PostPetition:
+      title: PostPetition
+      type: object
+      properties:
+        title:
+          $ref: "#/components/schemas/PetitionOverview/properties/title"
+        description:
+          $ref: "#/components/schemas/Petition/properties/description"
+        categoryId:
+          $ref: "#/components/schemas/PetitionOverview/properties/categoryId"
+        supportTiers:
+          type: array
+          items:
+            type: object
+            allOf:
+              - $ref: "#/components/schemas/PatchSupportTier"
+            required:
+              - title
+              - description
+              - cost
+      required:
+        - title
+        - description
+        - categoryId
+        - supportTiers
+    Supporter:
+      title: Supporter
+      type: object
+      properties:
+        supportId:
+          type: integer
+          minimum: 1
+          example: 1
+          nullable: false
+        supportTierId:
+          $ref: "#/components/schemas/SupportTier/properties/supportTierId"
+          nullable: false
+        message:
+          type: string
+          minLength: 1
+          maxLength: 512
+          nullable: true
+          example: "Amazing work, glad I can help support!"
+        supporterId:
+          $ref: "#/components/schemas/LoginResponse/properties/userId"
+          nullable: false
+        supporterFirstName:
+          $ref: "#/components/schemas/User/properties/firstName"
+          nullable: false
+        supporterLastName:
+          $ref: "#/components/schemas/User/properties/lastName"
+          nullable: false
+        timestamp:
+          $ref: "#/components/schemas/DateTimeOutput"
+          nullable: false
+    PostSupport:
+      title: PostSupport
+      type: object
+      properties:
+        supportTierId:
+          $ref: "#/components/schemas/SupportTier/properties/supportTierId"
+          nullable: false
+        message:
+          type: string
+          minLength: 1
+          maxLength: 512
+          nullable: false
+          example: "Amazing work, glad I can help support!"
+      required:
+        - supportTierId
+  securitySchemes:
+    UserToken:
+      type: apiKey
+      name: X-Authorization
+      in: header
